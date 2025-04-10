@@ -20,56 +20,50 @@ depth_threshold = 2100  # Depth threshold in mm (you may need to adjust this)
 print_interval = 5  # Print occupied space percentage every 5 seconds
 last_print_time = time.time()
 
-# Variables for tracking initial depth, RGB, and ROI
+# Variables for tracking initial depth and ROI
 roi = None  # To store ROI for segmentation
 initial_depth_map = None  # Store depth map of the entire scene
-initial_rgb_image = None  # Store RGB image for ROI selection
 
 # Function to let the user select the ROI
-def select_roi(rgb_image):
+def select_roi(depth_map):
     print("Select ROI. Press ENTER to confirm.")
-    roi = cv2.selectROI("Select ROI", rgb_image)
+    roi = cv2.selectROI("Select ROI", depth_map)
     cv2.destroyWindow("Select ROI")
     return roi
 
 # Output directory for storing images
 output_dir = "captures"
 depth_dir = os.path.join(output_dir, "depth")
-rgb_dir = os.path.join(output_dir, "rgb")
 os.makedirs(depth_dir, exist_ok=True)
-os.makedirs(rgb_dir, exist_ok=True)
 
 # First scan and ROI selection
 print("Scanning the initial scene. Please wait...")
 while True:
     capture = k4a.get_capture()
-    if capture.color is not None and capture.depth is not None:
-        # Get RGB and depth maps from Kinect capture
-        initial_rgb_image = capture.color
+    if capture.depth is not None:
+        # Get depth map from Kinect capture
         initial_depth_map = capture.transformed_depth
 
         # Normalize the depth map for better contrast during ROI selection
         normalized_depth_map = cv2.normalize(initial_depth_map, None, 0, 255, cv2.NORM_MINMAX)
         normalized_depth_map = np.uint8(normalized_depth_map)
 
-        # Display the RGB image to select ROI
-        cv2.imshow("Initial RGB Image", initial_rgb_image)
+        # Display the normalized depth map to select ROI with more contrast
+        cv2.imshow("Initial Depth Map", normalized_depth_map)
         print("Select ROI by clicking and dragging the mouse. Press ENTER when done.")
-        roi = select_roi(initial_rgb_image)
+        roi = select_roi(normalized_depth_map)
         print(f"ROI selected: {roi}")
         break
 
 # Once ROI is selected, focus on the second scan of the ROI
 while True:
     capture = k4a.get_capture()
-    if capture.color is not None and capture.depth is not None:
-        # Get RGB and depth maps from Kinect capture
-        rgb_image = capture.color
+    if capture.depth is not None:
+        # Get depth map from Kinect capture
         depth_map = capture.transformed_depth
 
-        # Crop both the RGB and depth maps to the selected ROI
+        # Crop the depth map to the selected ROI
         x, y, w, h = roi
-        rgb_image_roi = rgb_image[y:y+h, x:x+w]
         depth_map_roi = depth_map[y:y+h, x:x+w]
 
         # Apply Gaussian blur to reduce noise in the depth map (optional)
@@ -95,12 +89,10 @@ while True:
         empty_space_visual = occupied_mask.astype(np.uint8) * 255
         cv2.imshow("Occupied Space Mask", empty_space_visual)
 
-        # Save the depth image and RGB image every interval if you want
+        # Save the depth image and mask every interval if you want
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         depth_path = os.path.join(depth_dir, f"{timestamp}_depth.png")
-        rgb_path = os.path.join(rgb_dir, f"{timestamp}_rgb.png")
         cv2.imwrite(depth_path, depth_map_roi)
-        cv2.imwrite(rgb_path, rgb_image_roi)
 
         # Check for user input to quit
         if cv2.waitKey(1) & 0xFF == ord('q'):
